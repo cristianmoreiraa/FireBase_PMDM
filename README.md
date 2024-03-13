@@ -2,146 +2,111 @@
 
 ## Este proyecto demuestra cómo integrar Firebase Realtime Database en un juego Unity para crear una experiencia de juego en tiempo real. El código proporcionado muestra cómo conectar la base de datos, enviar y recibir datos, y actualizar objetos de juego en consecuencia.
 
-### Estructura del Proyecto
+---
 
-Conexión con Firebase:
+## Conexión a Firebase
 
-    La conexión con Firebase se establece al inicio del juego utilizando la instancia de FirebaseApp.
+    Primero, el script establece una conexión a Firebase y configura las referencias necesarias para interactuar con la base de datos en tiempo real.
 
 ```csharp
-// Start is called before the first frame update
-void Start()
+// Conexión con Firebase
+private FirebaseApp _app;
+// Singleton de la Base de Datos
+private FirebaseDatabase _db;
+// Referencia a la 'colección' Clientes
+private DatabaseReference _refClientes;
+// Referencia a un cliente en concreto
+private DatabaseReference _refAA002;
+```
+
+### La función `Conexion()` se encarga de verificar las dependencias de Firebase y crear una instancia de FirebaseApp, que es necesaria para el acceso y la manipulación de la base de datos.
+
+```csharp
+FirebaseApp Conexion()
 {
-    // inicializamos contador
-    _i = 0;
-    
-    // realizamos la conexión a Firebase
-    _app = Conexion();
-    
-    // obtenemos el Singleton de la base de datos
-    _db = FirebaseDatabase.DefaultInstance;
-    
-    // Definimos la referencia a Clientes
-    _refClientes = _db.GetReference("Jugadores");
-    
-    // Definimos la referencia a AA02
-    _refAA002 = _db.GetReference("Jugadores/AA02");
-    
-    // Recogemos todos los valores de Clientes
-    _refClientes.GetValueAsync().ContinueWithOnMainThread(task => {
-        if (task.IsFaulted) {
-            // Manejar el error...
+    FirebaseApp firebaseApp = null;
+    FirebaseApp.CheckAndFixDependenciesAsync().ContinueWithOnMainThread(task =>
+    {
+        var dependencyStatus = task.Result;
+        if (dependencyStatus == DependencyStatus.Available)
+        {
+            firebaseApp = FirebaseApp.DefaultInstance;
         }
-        else if (task.IsCompleted) {
-            DataSnapshot snapshot = task.Result;
-            // Mostramos los datos
-            RecorreResultado(snapshot);
+        else
+        {
+            Debug.LogError(System.String.Format(
+                "Could not resolve all Firebase dependencies: {0}", dependencyStatus));
+            firebaseApp = null;
         }
     });
-    
-    // Añadimos el evento de cambio de valor
-    _refAA002.ValueChanged += HandleValueChanged;
-
-    // Añadimos un nodo
-    AltaDevice();
-
-    DatabaseReference pickUpRef1 = _db.GetReference("PickUps/PickUP1");
-    DatabaseReference pickUpRef = _db.GetReference("PickUps/PickUp");
-
-    pickUpRef.ValueChanged += (sender, args) => HandleValueChanged(args.Snapshot, PickUp);
-    pickUpRef1.ValueChanged += (sender, args) => HandleValueChanged(args.Snapshot, PickUp1);
+    return firebaseApp;
 }
-
 ```
-Actualización en Tiempo Real:
 
-    La posición del jugador se actualiza en la base de datos en cada cuadro.
+## Inicialización y Escucha de Cambios
+### En el método `Start()`, se inicializan las referencias a la base de datos y se configuran listeners para escuchar cambios en tiempo real en las posiciones de objetos (PickUps) y datos de jugadores.
 
 ```csharp
-// Update is called once per frame
+void Start()
+{
+    _app = Conexion();
+    _db = FirebaseDatabase.DefaultInstance;
+    _refClientes = _db.GetReference("Jugadores");
+    _refAA002 = _db.GetReference("Jugadores/AA02");
+
+    // Otras configuraciones y listeners...
+}
+```
+
+## Actualización de Datos en Tiempo Real
+### El código utiliza eventos para manejar cambios en la base de datos, como la posición de objetos en el juego o la información de los jugadores. Por ejemplo, el método HandleValueChanged actualiza la posición de un objeto (PickUp) en el juego cuando se detecta un cambio en su posición en la base de datos.
+
+```csharp
+void HandleValueChanged(DataSnapshot snapshot, GameObject pickUpObject)
+{
+    float pickUpX = float.Parse(snapshot.Child("x").Value.ToString());
+    float pickUpY = float.Parse(snapshot.Child("y").Value.ToString());
+    float pickUpZ = float.Parse(snapshot.Child("z").Value.ToString());
+
+    Vector3 newPosition = new Vector3(pickUpX, pickUpY, pickUpZ);
+    pickUpObject.transform.position = newPosition;
+}
+```
+
+## Actualización de Datos del Jugador
+### Finalmente, el método Update() se ejecuta una vez por cada frame y se utiliza para actualizar la posición del jugador y su conteo de monedas en la base de datos en tiempo real.
+
+```csharp
 void Update()
 {
     float playerX = player.transform.position.x;
     float playerY = player.transform.position.y;
-
-    // Actualizo la base de datos en cada frame, ¡CUIDADO!
-    _refClientes.Child("AA01").Child("puntos").SetValueAsync(_i);
-    _i = _i + 0.01f;
     _refClientes.Child("AA01").Child("x").SetValueAsync(playerX);
     _refClientes.Child("AA01").Child("y").SetValueAsync(playerY);
-}
 
-```
-
-Evento de Cambio de Valor:
-
-    Se utiliza un evento para detectar cambios en los datos de la base de datos y actualizar objetos de juego en consecuencia.
-
-```csharp
-
-void HandleValueChanged(object sender, ValueChangedEventArgs args) {
-    if (args.DatabaseError != null) {
-        Debug.LogError(args.DatabaseError.Message);
-        return;
-    }
-    // Mostramos los resultados
-    MuestroJugador(args.Snapshot);
-    // Escalo el objeto
-    float escala = float.Parse(args.Snapshot.Child("puntos").Value.ToString());
-    Vector3 cambioEscala = new Vector3(escala, escala, escala);
-    ondavital.transform.localScale = cambioEscala;
+    int monedas = playerController.ObtenerContador();
+    _refClientes.Child("AA01").Child("monedas").SetValueAsync(monedas);
 }
 ```
-Alta de un Nodo:
+---
 
-    Se añade un nodo con un identificador único.
+## Veamos como se ve FireBase y Unity
+![img2](./monedas.png)
 
-```csharp
-// Damos de alta un nodo con un identificador único
-void AltaDevice()
-{
-    _refClientes.Child(SystemInfo.deviceUniqueIdentifier).Child("nombre").SetValueAsync("Mi dispositivo");
-}
-```
-Funciones de Ayuda:
-    
-    Se incluyen funciones auxiliares para recorrer resultados y mostrar información del jugador.
+> [!NOTE]
+>Aqui podemos ver como se recoger en nuestra base de datos los valores de las monedas que vamos recogiendo en nuestro Roll-A-Ball
 
-```csharp
-void RecorreResultado(DataSnapshot snapshot)
-{
-    foreach(var resultado in snapshot.Children) // Clientes
-    {
-        Debug.LogFormat("Key = {0}", resultado.Key);  // "Key = AAxx"
-        foreach(var levels in resultado.Children)
-        {
-            Debug.LogFormat("(key){0}:(value){1}", levels.Key, levels.Value);
-        }
-    }
-}
+![img3](./monedasAntes.png)
 
-// Muestra la información de un jugador
-void MuestroJugador(DataSnapshot jugador)
-{
-    foreach (var resultado in jugador.Children) // Jugador
-    {
-        Debug.LogFormat("{0}:{1}", resultado.Key, resultado.Value);
-    }
-}
+> [!NOTE]
+>Aqui podemos ver como antes de iniciar el juego nos faltan dos monedas, las cuales aparecerán una vez se ejecute este mismo
 
-```
-Configuración:
+![img4](./monedasDurante.png)
 
-    Clona o descarga el repositorio en tu máquina local.
+> [!NOTE]
+>Una vez ya ejecutado el programa, nos aparecen estas 2 monedas que se rodean
 
-Abre el proyecto en Unity.
-Configura Firebase en el proyecto Unity siguiendo las instrucciones proporcionadas por Firebase.
-Asegúrate de tener una base de datos Firebase configurada con la estructura adecuada.
-Uso
-Asegúrate de que la estructura de datos en tu base de datos Firebase coincida con la utilizada en el código.
-Ejecuta el juego en Unity y observa cómo los objetos de juego se actualizan en tiempo real según los cambios en la base de datos.
+![img5](./monedasUBI.png)
 
-![img](./fb.png)
-
->[!IMPORTANT]
-> Podemos ver como se está cogiendo las posiciones de la pelota, así como también los `PickUps` están juntos en la imagen porque en el FireBase estámos poniendoles el mimso valor de X e Y. Podemos mover las monedas (PickUps) mientras jugamos y ponerlas en las coordenadas que queramos.
+> [!NOTE]
+>Aqui podemos ver como les damos los valores a las monedas, además en el caso de que una vez está ejecutado el juego les cambiemos algún valor, estas cambiaran de posición automaticamente en nuestro Roll-A-Ball
