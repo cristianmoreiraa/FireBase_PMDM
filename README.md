@@ -143,5 +143,5 @@ Ejecuta el juego en Unity y observa cómo los objetos de juego se actualizan en 
 
 ![img](./fb.png)
 
->[IMPORTANT]
+>[!IMPORTANT]
 > Podemos ver como se está cogiendo las posiciones de la pelota, así como también los `PickUps` están juntos en la imagen porque en el FireBase estámos poniendoles el mimso valor de X e Y. Podemos mover las monedas (PickUps) mientras jugamos y ponerlas en las coordenadas que queramos.
